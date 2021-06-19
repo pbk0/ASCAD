@@ -1,5 +1,6 @@
 import os
 import os.path
+import pickle
 import sys
 import h5py
 import numpy as np
@@ -342,7 +343,10 @@ def read_parameters_from_file(param_filename):
 	early_stopping = 0
 	if ("early_stopping" in my_parameters):
 		early_stopping = my_parameters["early_stopping"]
-	return ascad_database, training_model, network_type, epochs, batch_size, train_len, validation_split, multilabel, early_stopping
+	history_file = None
+	if ("history_file" in my_parameters):
+		history_file = my_parameters["history_file"]
+	return ascad_database, training_model, network_type, epochs, batch_size, train_len, validation_split, multilabel, early_stopping, history_file
 
 
 if __name__ == "__main__":
@@ -366,9 +370,10 @@ if __name__ == "__main__":
 		epochs = 75
 		batch_size = 200
 		bugfix = 0
+		history_file = None
 	else:
 		#get parameters from user input
-		ascad_database, training_model, network_type, epochs, batch_size, train_len, validation_split, multilabel, early_stopping = read_parameters_from_file(sys.argv[1])
+		ascad_database, training_model, network_type, epochs, batch_size, train_len, validation_split, multilabel, early_stopping, history_file = read_parameters_from_file(sys.argv[1])
 
 	#load traces
 	(X_profiling, Y_profiling), (X_attack, Y_attack) = load_ascad(ascad_database)
@@ -393,6 +398,11 @@ if __name__ == "__main__":
 
 	### training
 	if (train_len == 0):
-		train_model(X_profiling, Y_profiling, best_model, training_model, epochs, batch_size, multilabel, validation_split, early_stopping)
+		_history = train_model(X_profiling, Y_profiling, best_model, training_model, epochs, batch_size, multilabel, validation_split, early_stopping)
 	else:
-		train_model(X_profiling[:train_len], Y_profiling[:train_len], best_model, training_model, epochs, batch_size, multilabel, validation_split, early_stopping)
+		_history = train_model(X_profiling[:train_len], Y_profiling[:train_len], best_model, training_model, epochs, batch_size, multilabel, validation_split, early_stopping)
+
+	# save history
+	if history_file is not None:
+		with open(history_file, 'wb') as _file:
+			pickle.dump(_history.history, _file)
