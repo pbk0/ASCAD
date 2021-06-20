@@ -125,11 +125,11 @@ class Experiment(enum.Enum):
             if self.name.endswith("_mlp"):
                 _network_type = "mlp"
                 _batch_size = 100
-                _epochs = 2
+                _epochs = 200
             elif self.name.endswith("_cnn"):
                 _network_type = "cnn"
                 _batch_size = 200
-                _epochs = 2
+                _epochs = 75
             else:
                 raise Exception(f"Unsupported {self}")
 
@@ -154,10 +154,11 @@ class Experiment(enum.Enum):
         return _ret
 
     # noinspection PyPep8Naming
-    def train(self, experiment_id: int, force: bool = False):
+    def train(self, experiment_id: int, use_gpu: bool, force: bool = False):
         # so that training happens on cpu ;)
-        os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
-        assert not tf.test.gpu_device_name()
+        if not use_gpu:
+            os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+            assert not tf.test.gpu_device_name()
         # files that will be saved
         _store_dir = self.store_dir(experiment_id)
         _model_file = _store_dir / "model.hdf5"
@@ -404,7 +405,15 @@ def main():
     experiment_id = int(sys.argv[2])
     _mode = sys.argv[3]
     if _mode == 'train':
-        experiment.train(experiment_id)
+        _use_gpu = False
+        try:
+            if sys.argv[4] == "use_gpu":
+                _use_gpu = True
+            else:
+                raise Exception(f"Unknown sys argv {sys.argv[4]}")
+        except IndexError:
+            ...
+        experiment.train(experiment_id, use_gpu=_use_gpu)
     elif _mode == 'ranks':
         experiment.ranks(experiment_id)
     else:

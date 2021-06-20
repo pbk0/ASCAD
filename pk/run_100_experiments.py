@@ -15,7 +15,7 @@ def wipe_file(file_name):
                 _file_path.unlink()
 
 
-def train_all():
+def train_all(use_gpu: bool):
     for i in range(runner.NUM_EXPERIMENTS):
         print(f"Experiment {i:03d}")
         gc.collect()
@@ -33,7 +33,8 @@ def train_all():
             else:
                 _semaphore_file.touch()
                 os.system(
-                    f"C:/Python38/python runner.py {experiment.name} {i} train")
+                    f"C:/Python38/python runner.py {experiment.name} {i} train {'use_gpu' if use_gpu else ''}"
+                )
                 _semaphore_file.unlink()
 
 
@@ -94,7 +95,15 @@ def zip_results():
 def main():
     _mode = sys.argv[1]
     if _mode == 'train':
-        train_all()
+        _use_gpu = False
+        try:
+            if sys.argv[2] == "use_gpu":
+                _use_gpu = True
+            else:
+                raise Exception(f"Unknown sys argv {sys.argv[2]}")
+        except IndexError:
+            ...
+        train_all(use_gpu=_use_gpu)
     elif _mode == 'ranks':
         ranks_all()
     elif _mode == 'wipe':
