@@ -175,6 +175,7 @@ class Experiment(enum.Enum):
             # skip is results not present
             if not self.exists(experiment_id):
                 continue
+            # noinspection PyTypeChecker
             avg_rank = np.load(store_dir / f"avg_rank.npy")
             traces_with_rank_0 = np.where(avg_rank <= 0)[0]
             if len(traces_with_rank_0) == 0:
