@@ -3,6 +3,7 @@ import sys
 import runner
 import gc
 import os
+import zipfile
 
 
 def wipe_file(file_name):
@@ -73,6 +74,23 @@ def show_results():
     )
 
 
+def zip_results():
+    _zip_file_path = pathlib.Path("results_ascad.zip")
+    if _zip_file_path.exists():
+        _zip_file_path.unlink()
+    _zip_file = zipfile.ZipFile("results_ascad.zip", 'w')
+    for i in range(runner.NUM_EXPERIMENTS):
+        for experiment in runner.Experiment:
+            store_dir = experiment.store_dir(i)
+            history_file = store_dir / f"history.pickle"
+            if history_file.exists():
+                _zip_file.write(history_file, arcname=f"results/{experiment.name}/{i}/history.pickle")
+            ranks_file = store_dir / f"ranks.npy"
+            if ranks_file.exists():
+                _zip_file.write(ranks_file, arcname=f"results/{experiment.name}/{i}/ranks.npy")
+    _zip_file.close()
+
+
 def main():
     _mode = sys.argv[1]
     if _mode == 'train':
@@ -83,6 +101,8 @@ def main():
         wipe_file(sys.argv[2])
     elif _mode == 'show':
         show_results()
+    elif _mode == 'zip':
+        zip_results()
     else:
         raise Exception(f"Unknown {_mode}")
 
