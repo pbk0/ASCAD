@@ -248,10 +248,16 @@ class Experiment(enum.Enum):
     def results(self):
 
         # create figures
-        ranks_fig = go.Figure(
+        avg_rank_fig = go.Figure(
             layout=go.Layout(
                 title=go.layout.Title(
                     text=f"{self.name}: Average Rank")
+            )
+        )
+        rank_variance_fig = go.Figure(
+            layout=go.Layout(
+                title=go.layout.Title(
+                    text=f"{self.name}: Rank Variance")
             )
         )
         loss_fig = go.Figure(
@@ -287,6 +293,7 @@ class Experiment(enum.Enum):
             # ranks
             ranks = np.load(store_dir / f"ranks.npy")
             avg_rank = np.mean(ranks, axis=0)
+            rank_variance = np.var(ranks, axis=0)
             traces_with_rank_0 = np.where(avg_rank <= 0)[0]
             if len(traces_with_rank_0) == 0:
                 non_converged_experiments.append(experiment_id)
@@ -296,10 +303,18 @@ class Experiment(enum.Enum):
 
             # noinspection DuplicatedCode
             rank_plot_until = self.rank_plot_until
-            ranks_fig.add_trace(
+            avg_rank_fig.add_trace(
                 go.Scatter(
                     x=np.arange(rank_plot_until),
                     y=avg_rank[:rank_plot_until],
+                    mode='lines',
+                    name=f"exp_{experiment_id:03d}"
+                )
+            )
+            rank_variance_fig.add_trace(
+                go.Scatter(
+                    x=np.arange(rank_plot_until),
+                    y=rank_variance[:rank_plot_until],
                     mode='lines',
                     name=f"exp_{experiment_id:03d}"
                 )
@@ -340,8 +355,10 @@ class Experiment(enum.Enum):
             title=f"{self.name}: Histogram",
         )
         hist_fig.write_image((self.plot_dir / f"hist.svg").as_posix())
-        print("plotting ranks")
-        ranks_fig.write_image((self.plot_dir / f"rank.svg").as_posix())
+        print("plotting average rank")
+        avg_rank_fig.write_image((self.plot_dir / f"average_rank.svg").as_posix())
+        print("plotting rank variance")
+        rank_variance_fig.write_image((self.plot_dir / f"rank_variance.svg").as_posix())
         print("plotting train loss")
         loss_fig.write_image((self.plot_dir / f"loss.svg").as_posix())
         print("plotting accuracy")
@@ -368,9 +385,13 @@ class Experiment(enum.Enum):
             "",
             f"![Histogram - {self.name}]({self.name}/hist.svg)",
             "",
-            f"## Ranks",
+            f"## Average Rank",
             "",
-            f"![Rank - {self.name}]({self.name}/rank.svg)",
+            f"![Average Rank - {self.name}]({self.name}/average_rank.svg)",
+            "",
+            f"## Rank Variance",
+            "",
+            f"![Rank Variance - {self.name}]({self.name}/rank_variance.svg)",
             "",
             # f"## Train Loss",
             # "",
