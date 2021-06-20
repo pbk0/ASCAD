@@ -32,7 +32,7 @@ def train_all():
             else:
                 _semaphore_file.touch()
                 os.system(
-                    f"C:/Python37/python runner.py {experiment.name} {i} train")
+                    f"C:/Python38/python runner.py {experiment.name} {i} train")
                 _semaphore_file.unlink()
 
 
