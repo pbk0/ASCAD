@@ -12,6 +12,8 @@ import pandas as pd
 import os
 
 ROOT_DIR = pathlib.Path(__file__).parent / "results"
+NUM_ATTACKS_PER_EXPERIMENT = 30
+NUM_EXPERIMENTS = 100
 
 
 def rank(predictions, key, targets, ntraces, interval=10):
@@ -169,7 +171,7 @@ class Experiment(enum.Enum):
 
         # first lets see check if some results were not converges
         non_converged_experiments = []
-        for experiment_id in range(100):
+        for experiment_id in range(NUM_EXPERIMENTS):
             # get store dir
             store_dir = self.store_dir(experiment_id)
             # skip is results not present
@@ -201,7 +203,7 @@ class Experiment(enum.Enum):
 
         # plot
         min_traces_with_rank_0_per_experiment = []
-        for experiment_id in range(100):
+        for experiment_id in range(NUM_EXPERIMENTS):
             # get store dir
             store_dir = self.store_dir(experiment_id)
             # skip is results not present
@@ -277,14 +279,15 @@ class Experiment(enum.Enum):
             f"# Results for {self.name}", "", f"## Convergence", ""
         ]
         if bool(non_converged_experiments):
+            _percent_failed = (len(non_converged_experiments) / NUM_EXPERIMENTS) * 100.
             _md_file_lines += [
-                f"**Note that `{len(non_converged_experiments)} %` experiments did not converge.**",
+                f"**Note that `{_percent_failed} %` experiments did not converge.**",
                 f"Failed experiment id's are as below:",
                 f"  > {non_converged_experiments}", ""
             ]
         else:
             _md_file_lines += [
-                f"Note that all 100 experiments converged", ""
+                f"Note that all {NUM_EXPERIMENTS} experiments converged", ""
             ]
         _md_file_lines += [
             f"## Histogram",
