@@ -253,7 +253,7 @@ def multilabel_without_permind_predict(predictions):
 
 
 # Check a saved model against one of the ASCAD databases Attack traces
-def check_model(model_file, ascad_database, num_traces=2000, target_byte=2, multilabel=0, simulated_key=0, save_file="", avg_rank_file=None):
+def check_model(model_file, ascad_database, num_traces=2000, target_byte=2, multilabel=0, simulated_key=0, save_file=""):
 	check_file_exists(model_file)
 	check_file_exists(ascad_database)
 	# Load profiling and attack data and metadata from the ASCAD database
@@ -282,7 +282,6 @@ def check_model(model_file, ascad_database, num_traces=2000, target_byte=2, mult
 		print("Error: model input shape length %d is not expected ..." % len(input_layer_shape))
 		sys.exit(-1)
 	# Predict our probabilities
-	rank_step = 1
 	predictions = model.predict(input_data)
 	if (multilabel!=0):
 		if (multilabel==1):
@@ -290,7 +289,7 @@ def check_model(model_file, ascad_database, num_traces=2000, target_byte=2, mult
 		else:
 			predictions_sbox = multilabel_without_permind_predict(predictions)
 		for target_byte in range(16):
-			ranks_i = full_ranks(predictions_sbox[target_byte], X_attack, Metadata_attack, 0, num_traces, rank_step, target_byte, simulated_key)
+			ranks_i = full_ranks(predictions_sbox[target_byte], X_attack, Metadata_attack, 0, num_traces, 10, target_byte,	simulated_key)
 			# We plot the results
 			x_i = [ranks_i[i][0] for i in range(0, ranks_i.shape[0])]
 			y_i = [ranks_i[i][1] for i in range(0, ranks_i.shape[0])]
@@ -305,28 +304,23 @@ def check_model(model_file, ascad_database, num_traces=2000, target_byte=2, mult
 		else:
 			plt.show(block=False)
 
-		if avg_rank_file is not None:
-			raise Exception(f"The avg_rank_file must not be supplied when multilabel!=0")
-
 	else:
 		predictions_sbox_i = predictions
 	  # We test the rank over traces of the Attack dataset, with a step of 10 traces
-		ranks = full_ranks(predictions_sbox_i, X_attack, Metadata_attack, 0, num_traces, rank_step, target_byte, simulated_key)
+		ranks = full_ranks(predictions_sbox_i, X_attack, Metadata_attack, 0, num_traces, 10, target_byte, simulated_key)
 		# We plot the results
-		# x = [ranks[i][0] for i in range(0, ranks.shape[0])]
-		# y = [ranks[i][1] for i in range(0, ranks.shape[0])]
-		# plt.title('Performance of '+model_file+' against '+ascad_database)
-		# plt.xlabel('number of traces')
-		# plt.ylabel('rank')
-		# plt.grid(True)
-		# plt.plot(x, y)
-		# plt.show(block=False)
-		# if (save_file != ""):
-		# 	plt.savefig(save_file)
-		# else:
-		# 	plt.show(block=False)
-		if avg_rank_file is not None:
-			np.save(avg_rank_file, ranks)
+		x = [ranks[i][0] for i in range(0, ranks.shape[0])]
+		y = [ranks[i][1] for i in range(0, ranks.shape[0])]
+		plt.title('Performance of '+model_file+' against '+ascad_database)
+		plt.xlabel('number of traces')
+		plt.ylabel('rank')
+		plt.grid(True)
+		plt.plot(x, y)
+		plt.show(block=False)
+		if (save_file != ""):
+			plt.savefig(save_file)
+		else:
+			plt.show(block=False)
 
 def read_parameters_from_file(param_filename):
 	#read parameters for the extract_traces function from given filename
@@ -351,13 +345,8 @@ def read_parameters_from_file(param_filename):
 	save_file = ""
 	if ("save_file" in my_parameters):
 		save_file = my_parameters["save_file"]
-	avg_rank_file = None
-	if ("avg_rank_file" in my_parameters):
-		if multilabel != 0:
-			raise Exception(f"You cannot save average ranks when using multilabel. This is not supported.")
-		avg_rank_file = my_parameters["avg_rank_file"]
 
-	return model_file, ascad_database, num_traces, target_byte, multilabel, simulated_key, save_file, avg_rank_file
+	return model_file, ascad_database, num_traces, target_byte, multilabel, simulated_key, save_file
 
 if __name__ == "__main__":
 	if len(sys.argv)!=2:
@@ -370,14 +359,14 @@ if __name__ == "__main__":
 		simulated_key=0
 	else:
 		#get parameters from user input
-		model_file, ascad_database, num_traces, target_byte, multilabel, simulated_key, save_file, avg_rank_file = read_parameters_from_file(sys.argv[1])
+		model_file, ascad_database, num_traces, target_byte, multilabel, simulated_key, save_file  = read_parameters_from_file(sys.argv[1])
 
 	#check model
-	check_model(model_file, ascad_database, num_traces, target_byte, multilabel, simulated_key, save_file, avg_rank_file)
+	check_model(model_file, ascad_database, num_traces, target_byte, multilabel, simulated_key, save_file)
 
 
-	# try:
-	# 	input("Press enter to exit ...")
-	# except SyntaxError:
-	# 	pass
+	try:
+		input("Press enter to exit ...")
+	except SyntaxError:
+		pass
 
