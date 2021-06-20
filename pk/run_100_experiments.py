@@ -5,39 +5,57 @@ import gc
 import os
 
 
-def wipe_incomplete():
-    for i in range(100):
-        print(f"Experiment {i:03d}")
-        gc.collect()
+def wipe_file(file_name):
+    for i in range(runner.NUM_EXPERIMENTS):
+        print(f"Experiment {i:03d} ... wiping {file_name}")
         for experiment in runner.Experiment:
-            _log_path = pathlib.Path(f'results/{experiment.name}/{i}/log.txt')
-            if _log_path.exists():
-                if not experiment.exists(i):
-                    print(f"  > {experiment.name}:{i:03d} ... wiping")
-                    for _ in _log_path.parent.iterdir():
-                        _.unlink()
+            _file_path = pathlib.Path(f'results/{experiment.name}/{i}/{file_name}')
+            if _file_path.exists():
+                _file_path.unlink()
 
 
 def train_all():
-    for i in range(100):
+    for i in range(runner.NUM_EXPERIMENTS):
         print(f"Experiment {i:03d}")
         gc.collect()
         for experiment in runner.Experiment:
-            _log_path = pathlib.Path(f'results/{experiment.name}/{i}/log.txt')
-            _exists = experiment.exists(i)
-            if _log_path.exists():
-                if _exists:
-                    print(f"  > {experiment.name}:{i:03d} ... results already available")
-                else:
-                    print(f"  > {experiment.name}:{i:03d} ... someone else is working")
+
+            # check if results exist
+            _model_file = experiment.store_dir(i) / "model.hdf5"
+            if _model_file.exists():
+                continue
+
+            # make semaphore
+            _semaphore_file = pathlib.Path(f'results/{experiment.name}/{i}/__computing__')
+            if _semaphore_file.exists():
+                print(f"  > {experiment.name}:{i:03d} ... someone else is working")
             else:
-                print(f"  > {experiment.name}:{i:03d}")
-                if _exists:
-                    raise Exception(f"Where is the log file ??")
-                else:
-                    os.system(
-                        f"C:/Python38/python runner.py {experiment.name} {i} train > "
-                        f"{_log_path.as_posix()}")
+                _semaphore_file.touch()
+                os.system(
+                    f"C:/Python37/python runner.py {experiment.name} {i} train")
+                _semaphore_file.unlink()
+
+
+def ranks_all():
+    for i in range(runner.NUM_EXPERIMENTS):
+        print(f"Experiment {i:03d}")
+        gc.collect()
+        for experiment in runner.Experiment:
+
+            # check if results exist
+            _ranks_file = experiment.store_dir(i) / "ranks.npy"
+            if _ranks_file.exists():
+                continue
+
+            # make semaphore
+            _semaphore_file = pathlib.Path(f'results/{experiment.name}/{i}/__computing__')
+            if _semaphore_file.exists():
+                print(f"  > {experiment.name}:{i:03d} ... someone else is working")
+            else:
+                _semaphore_file.touch()
+                os.system(
+                    f"C:/Python38/python runner.py {experiment.name} {i} ranks")
+                _semaphore_file.unlink()
 
 
 def show_results():
@@ -59,8 +77,10 @@ def main():
     _mode = sys.argv[1]
     if _mode == 'train':
         train_all()
+    elif _mode == 'ranks':
+        ranks_all()
     elif _mode == 'wipe':
-        wipe_incomplete()
+        wipe_file(sys.argv[2])
     elif _mode == 'show':
         show_results()
     else:
