@@ -232,6 +232,13 @@ class Experiment(enum.Enum):
         os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
         assert not tf.test.gpu_device_name()
 
+        # get data
+        if self.name.startswith("ascad_v1_fk"):
+            _data = load_ascad_v1_fk(self.get_database_file_name())
+        else:
+            raise Exception(f"Experiment {self} is not supported")
+        X_profiling, Y_profiling, X_attack, targets, key_attack = _data
+            
         for experiment_id in range(NUM_EXPERIMENTS):
             print(f"Computing ranks for experiment {experiment_id} ...")
 
@@ -245,19 +252,12 @@ class Experiment(enum.Enum):
                 if force:
                     _ranks_file.unlink()
                 else:
-                    return
+                    continue
 
             # if model does not exist raise error
             if not _model_file.exists():
                 print(f"  > There is no model file for experiment {experiment_id} so skipping ...")
-                return
-
-            # get data
-            if self.name.startswith("ascad_v1_fk"):
-                _data = load_ascad_v1_fk(self.get_database_file_name())
-            else:
-                raise Exception(f"Experiment {self} is not supported")
-            X_profiling, Y_profiling, X_attack, targets, key_attack = _data
+                continue
 
             # load model
             _model = load_model(_model_file.as_posix())
