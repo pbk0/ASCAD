@@ -7,9 +7,12 @@ import zipfile
 
 
 def wipe_file(file_name):
-    for i in range(runner.NUM_EXPERIMENTS):
-        print(f"Experiment {i:03d} ... wiping {file_name}")
-        for experiment in runner.Experiment:
+    for experiment in runner.Experiment:
+        print(f"Experiment {experiment.name} ... wiping {file_name}")
+        _file_path = pathlib.Path(f'results/{experiment.name}/{file_name}')
+        if _file_path.exists():
+            _file_path.unlink()
+        for i in range(runner.NUM_EXPERIMENTS):
             _file_path = pathlib.Path(f'results/{experiment.name}/{i}/{file_name}')
             if _file_path.exists():
                 _file_path.unlink()
@@ -33,31 +36,23 @@ def train_all(use_gpu: bool):
             else:
                 _semaphore_file.touch()
                 os.system(
-                    f"C:/Python38/python runner.py {experiment.name} {i} train {'use_gpu' if use_gpu else ''}"
+                    f"C:/Python38/python runner.py {experiment.name} train {i} {'use_gpu' if use_gpu else ''}"
                 )
                 _semaphore_file.unlink()
 
 
 def ranks_all():
-    for i in range(runner.NUM_EXPERIMENTS):
-        print(f"Experiment {i:03d}")
-        gc.collect()
-        for experiment in runner.Experiment:
-
-            # check if results exist
-            _ranks_file = experiment.store_dir(i) / "ranks.npy"
-            if _ranks_file.exists():
-                continue
-
-            # make semaphore
-            _semaphore_file = pathlib.Path(f'results/{experiment.name}/{i}/__computing__')
-            if _semaphore_file.exists():
-                print(f"  > {experiment.name}:{i:03d} ... someone else is working")
-            else:
-                _semaphore_file.touch()
-                os.system(
-                    f"C:/Python38/python runner.py {experiment.name} {i} ranks")
-                _semaphore_file.unlink()
+    gc.collect()
+    for experiment in runner.Experiment:
+        # make semaphore
+        _semaphore_file = pathlib.Path(f'results/{experiment.name}/__computing__')
+        if _semaphore_file.exists():
+            print(f"  > {experiment.name}: ... someone else is working")
+        else:
+            _semaphore_file.touch()
+            os.system(
+                f"C:/Python38/python runner.py {experiment.name} ranks")
+            _semaphore_file.unlink()
 
 
 def show_results():

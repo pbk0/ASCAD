@@ -9,7 +9,7 @@ import plotly.graph_objects as go
 import pickle
 import plotly.express as px
 import sys
-from tqdm import tqdm
+import tqdm
 import pandas as pd
 import os
 import tensorflow as tf
@@ -54,7 +54,7 @@ def load_ascad_v1_fk(ascad_database_file):
 
     print("Creating all target labels for the attack traces:")
     targets = np.zeros((X_attack.shape[0], 256), dtype='uint8')
-    for i in tqdm(range(X_attack.shape[0])):
+    for i in tqdm.trange(X_attack.shape[0]):
         for k in range(256):
             targets[i, k] = AES_sbox[k^pt_attack[i,2]]
 
@@ -63,21 +63,63 @@ def load_ascad_v1_fk(ascad_database_file):
     return X_profiling, Y_profiling, X_attack, targets, real_key[2]
 
 
-def rank(predictions, key, targets, ntraces, interval=10):
-    ranktime = np.zeros(int(ntraces/interval))
-    pred = np.zeros(256)
+def preprocess_predictions(predictions, all_guess_targets, num_examples, num_guesses) -> np.ndarray:
 
-    idx = np.random.randint(predictions.shape[0], size=ntraces)
+    # make copy
+    predictions = predictions.copy()
 
-    for i, p in enumerate(idx):
-        for k in range(predictions.shape[1]):
-            pred[k] += predictions[p, targets[p, k]]
+    # Add small positive value
+    # note that we set any o or negative probability to smallest
+    # possible positive number so that np.log does not
+    # result to -np.inf
+    predictions[predictions <= 1e-45] = 1e-45
 
-        if i % interval == 0:
-            ranked = np.argsort(pred)[::-1]
-            ranktime[int(i/interval)] = list(ranked).index(key)
+    # Sort based on guessed targets
+    sorted_predictions = predictions[
+        np.asarray(
+            [np.arange(num_examples)]
+        ).repeat(num_guesses, axis=0).T,
+        all_guess_targets
+    ]
 
-    return ranktime
+    # take negative logs
+    sorted_neg_log_preds = -np.log(sorted_predictions)
+
+    # return
+    return sorted_neg_log_preds
+
+
+def compute_ranks(predictions, all_guess_targets, correct_key, num_attacks) -> np.ndarray:
+
+    # num_examples and num_guesses
+    num_examples = predictions.shape[0]
+    num_guesses = 256
+
+    # some buffers
+    all_ranks = np.zeros((num_attacks, num_examples), np.uint8)
+
+    # fix seed for deterministic behaviour
+    np.random.seed(123456)
+
+    # get sorted_neg_log_preds
+    sorted_neg_log_preds = preprocess_predictions(predictions, all_guess_targets, num_examples, num_guesses)
+
+    # loop over
+    for attack_id in tqdm.trange(num_attacks):
+        # first shuffle for simulating random experiment
+        np.random.shuffle(sorted_neg_log_preds)
+
+        # cum sum
+        sorted_neg_log_preds_cum_sum = np.cumsum(sorted_neg_log_preds, axis=0)
+
+        # compute rank
+        ranks_for_all_guesses = sorted_neg_log_preds_cum_sum.argsort().argsort()
+
+        # set correct rank
+        all_ranks[attack_id, :] = ranks_for_all_guesses[:, correct_key]
+
+    # return
+    return all_ranks
 
 
 class Experiment(enum.Enum):
@@ -85,9 +127,9 @@ class Experiment(enum.Enum):
     ascad_v1_fk_0_mlp = enum.auto()
     ascad_v1_fk_50_mlp = enum.auto()
     ascad_v1_fk_100_mlp = enum.auto()
-    ascad_v1_fk_0_cnn = enum.auto()
-    ascad_v1_fk_50_cnn = enum.auto()
-    ascad_v1_fk_100_cnn = enum.auto()
+    # ascad_v1_fk_0_cnn = enum.auto()
+    # ascad_v1_fk_50_cnn = enum.auto()
+    # ascad_v1_fk_100_cnn = enum.auto()
 
     @property
     def plot_dir(self) -> pathlib.Path:
@@ -185,65 +227,68 @@ class Experiment(enum.Enum):
         os.system(
             f"C:/Python38/python ../ASCAD_train_models.py {_train_params_file.as_posix()}")
 
-    def ranks(self, experiment_id: int, force: bool = False):
+    def ranks(self, force: bool = False):
         # so that ranking happens on cpu ;)
         os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
         assert not tf.test.gpu_device_name()
-        # files that will be saved
-        _store_dir = self.store_dir(experiment_id)
-        _model_file = _store_dir / "model.hdf5"
-        _ranks_file = _store_dir / "ranks.npy"
 
-        # if result present return
-        if _ranks_file.exists():
-            if force:
-                _ranks_file.unlink()
-            else:
+        for experiment_id in range(NUM_EXPERIMENTS):
+            print(f"Computing ranks for experiment {experiment_id} ...")
+
+            # files that will be saved
+            _store_dir = self.store_dir(experiment_id)
+            _model_file = _store_dir / "model.hdf5"
+            _ranks_file = _store_dir / "ranks.npy"
+
+            # if result present return
+            if _ranks_file.exists():
+                if force:
+                    _ranks_file.unlink()
+                else:
+                    return
+
+            # if model does not exist raise error
+            if not _model_file.exists():
+                print(f"  > There is no model file for experiment {experiment_id} so skipping ...")
                 return
 
-        # if model does not exist raise error
-        if not _model_file.exists():
-            raise Exception(f"We cannot rank as model file does not exist")
+            # get data
+            if self.name.startswith("ascad_v1_fk"):
+                _data = load_ascad_v1_fk(self.get_database_file_name())
+            else:
+                raise Exception(f"Experiment {self} is not supported")
+            X_profiling, Y_profiling, X_attack, targets, key_attack = _data
 
-        # get data
-        if self.name.startswith("ascad_v1_fk"):
-            _data = load_ascad_v1_fk(self.get_database_file_name())
-        else:
-            raise Exception(f"Experiment {self} is not supported")
-        X_profiling, Y_profiling, X_attack, targets, key_attack = _data
+            # load model
+            _model = load_model(_model_file.as_posix())
 
-        # load model
-        _model = load_model(_model_file.as_posix())
+            input_layer_shape = _model.get_layer(index=0).input_shape
+            if len(input_layer_shape) == 2:
+                tracesAttack_shaped = X_attack
+            elif len(input_layer_shape) == 3:
+                tracesAttack_shaped = X_attack.reshape(
+                    (X_attack.shape[0], X_attack.shape[1], 1))
+            else:
+                raise Exception(f"Unknown shape {len(input_layer_shape)}")
 
-        # Model evaluation
-        ntraces = X_attack.shape[0]  # Number of traces to use per attack attempt
-        nattack = NUM_ATTACKS_PER_EXPERIMENT  # Number of attacks, each using ntraces traces
-        interval = 1  # granualirity
+            print('Get predictions:')
+            predictions = _model.predict(tracesAttack_shaped, verbose=1)
 
-        input_layer_shape = _model.get_layer(index=0).input_shape
-        if len(input_layer_shape) == 2:
-            tracesAttack_shaped = X_attack
-        elif len(input_layer_shape) == 3:
-            tracesAttack_shaped = X_attack.reshape(
-                (X_attack.shape[0], X_attack.shape[1], 1))
-        else:
-            raise Exception(f"Unknown shape {len(input_layer_shape)}")
+            print('Evaluating the model:')
+            ranks = compute_ranks(
+                predictions=predictions,
+                all_guess_targets=targets,
+                correct_key=key_attack,
+                num_attacks=NUM_ATTACKS_PER_EXPERIMENT,
+            )
 
-        predictions = _model.predict(tracesAttack_shaped, verbose=1)
-        predictions = np.log(predictions + 1e-40)
+            # Calculate the mean of the rank over the nattack attacks
+            avg_rank = np.mean(ranks, axis=0)
 
-        print('Evaluating the model:')
-        ranks = np.zeros((nattack, int(ntraces / interval)), dtype=np.uint8)
-        for i in tqdm(range(nattack)):
-            ranks[i] = rank(predictions, key_attack, targets, ntraces, interval)
+            print(np.where(avg_rank <= 0.))
 
-        # Calculate the mean of the rank over the nattack attacks
-        avg_rank = np.mean(ranks, axis=0)
-
-        print(np.where(avg_rank <= 0.))
-
-        # save ranks
-        np.save(_ranks_file, ranks)
+            # save ranks
+            np.save(_ranks_file, ranks)
 
     def results(self):
 
@@ -423,10 +468,10 @@ def main():
     print("*******************************************************************************")
 
     experiment = Experiment[sys.argv[1]]  # type: Experiment
-    experiment_id = int(sys.argv[2])
-    _mode = sys.argv[3]
+    _mode = sys.argv[2]
     if _mode == 'train':
         _use_gpu = False
+        _experiment_id = int(sys.argv[3])
         try:
             if sys.argv[4] == "use_gpu":
                 _use_gpu = True
@@ -434,9 +479,9 @@ def main():
                 raise Exception(f"Unknown sys argv {sys.argv[4]}")
         except IndexError:
             ...
-        experiment.train(experiment_id, use_gpu=_use_gpu)
+        experiment.train(_experiment_id, use_gpu=_use_gpu)
     elif _mode == 'ranks':
-        experiment.ranks(experiment_id)
+        experiment.ranks()
     else:
         raise Exception(f"Unknown {_mode}")
 
