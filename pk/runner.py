@@ -127,9 +127,9 @@ class Experiment(enum.Enum):
     ascad_v1_fk_0_mlp = enum.auto()
     ascad_v1_fk_50_mlp = enum.auto()
     ascad_v1_fk_100_mlp = enum.auto()
-    # ascad_v1_fk_0_cnn = enum.auto()
-    # ascad_v1_fk_50_cnn = enum.auto()
-    # ascad_v1_fk_100_cnn = enum.auto()
+    ascad_v1_fk_0_cnn = enum.auto()
+    ascad_v1_fk_50_cnn = enum.auto()
+    ascad_v1_fk_100_cnn = enum.auto()
 
     @property
     def plot_dir(self) -> pathlib.Path:
